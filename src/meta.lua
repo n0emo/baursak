@@ -48,3 +48,12 @@ function run(name, args) end
 ---@param ... string
 ---@return boolean
 function is_plat(...) end
+
+---Check if the program is available in PATH
+---@param ... string
+---@return boolean
+function has_cmd(...) end
+
+---Check if the program is available in PATH and raises an error if it does not
+---@param ... string
+function assert_cmd(...) end

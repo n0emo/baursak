@@ -1,6 +1,6 @@
 use std::{collections::HashMap, env};
 
-use anyhow::Context as _;
+use anyhow::{Context as _, anyhow};
 use mlua::{Lua, Result, Table, Variadic};
 use tokio::process::Command;
 
@@ -11,6 +11,8 @@ pub fn add_builtins(lua: &Lua, t: &Table) -> Result<()> {
     t.set("sh", lua.create_async_function(self::sh)?)?;
     t.set("run", lua.create_async_function(self::run)?)?;
     t.set("is_plat", lua.create_function(self::is_plat)?)?;
+    t.set("has_cmd", lua.create_function(self::has_cmd)?)?;
+    t.set("assert_cmd", lua.create_function(self::assert_cmd)?)?;
     Ok(())
 }
 
@@ -81,4 +83,27 @@ fn is_plat(_lua: &Lua, platforms: Variadic<String>) -> Result<bool> {
     }
 
     Ok(result)
+}
+
+fn has_cmd(_lua: &Lua, cmds: Variadic<String>) -> Result<bool> {
+    let mut result = true;
+    for cmd in cmds {
+        result &= which::which(cmd).is_ok();
+    }
+    Ok(result)
+}
+
+fn assert_cmd(_lua: &Lua, cmds: Variadic<String>) -> Result<()> {
+    let mut not_available = Vec::new();
+    for cmd in cmds {
+        if which::which(&cmd).is_err() {
+            not_available.push(cmd);
+        }
+    }
+
+    if not_available.is_empty() {
+        Ok(())
+    } else {
+        Err(anyhow!("Commands are not available: {}", not_available.join(",")).into())
+    }
 }

@@ -17,3 +17,4 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - `sh` function that runs command in shell
 - `run` function that runs task with specified argumants
 - `is_plat` function that checks if current platform matches one of the argument
+- `has_cmd` and `assert_cmd` for checking if command is available
