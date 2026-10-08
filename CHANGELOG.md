@@ -16,3 +16,4 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - LuaLS definition file generation
 - `sh` function that runs command in shell
 - `run` function that runs task with specified argumants
+- `is_plat` function that checks if current platform matches one of the argument
