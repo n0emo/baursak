@@ -1,0 +1,23 @@
+[package]
+name = "baursak"
+version = "0.1.0"
+edition = "2024"
+description = "Tasty tasks written in Lua"
+authors = ["Albert Shefner <usn0emo@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/n0emo/baursak"
+readme = "README.md"
+
+[[bin]]
+name = "bk"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.104"
+clap = { version = "4.6.7", features = ["derive"] }
+futures = "0.3.34"
+indexmap = "2.14.2"
+mlua = { version = "0.12.2", features = ["anyhow", "async", "lua55", "macros", "mlua_derive", "serde", "serialize", "vendored"] }
+serde = { version = "1.0.229", features = ["derive"] }
+subst = "0.3.8"
+tokio = { version = "1.53.2", features = ["full"] }

@@ -1,0 +1,18 @@
+task("install", "cargo install --path .")
+task("build", "cargo build --all-features")
+task("test", "cargo test --all-features")
+task("fmt", "cargo fmt")
+task("lint", "cargo clippy --all-features --all-targets -- -D warnings")
+task("lint:fix", "cargo clippy --all-features --all-targets --fix --allow-dirty")
+
+task("precommit", function()
+	run("build")
+	run("test")
+	run("lint:fix")
+	run("fmt")
+end)
+
+task("ci", function()
+	run("test")
+	run("lint")
+end)
