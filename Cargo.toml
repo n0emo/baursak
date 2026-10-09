@@ -16,8 +16,9 @@ path = "src/main.rs"
 anyhow = "1.0.104"
 clap = { version = "4.6.7", features = ["derive"] }
 futures = "0.3.34"
-indexmap = "2.14.2"
-mlua = { version = "0.12.2", features = ["anyhow", "async", "lua55", "macros", "mlua_derive", "serde", "serialize", "vendored"] }
+lazy_static = "1.5.1"
+mlua = { version = "0.12.2", features = ["anyhow", "async", "lua55", "macros", "mlua_derive", "send", "serde", "serialize", "vendored"] }
+normalize-path = "0.2.2"
 serde = { version = "1.0.229", features = ["derive"] }
 subst = "0.3.8"
 tokio = { version = "1.53.2", features = ["full"] }

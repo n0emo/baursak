@@ -1,10 +1,13 @@
 use std::{collections::HashMap, env};
 
-use anyhow::{Context as _, anyhow};
-use mlua::{Lua, Result, Table, Variadic};
+use anyhow::anyhow;
+use mlua::{Lua, Result, Table, Value, Variadic};
 use tokio::process::Command;
 
-use crate::{state::App, task::Task};
+use crate::{
+    task::{Task, TaskId},
+    workspace::State,
+};
 
 pub fn add_builtins(lua: &Lua, t: &Table) -> Result<()> {
     t.set("task", lua.create_async_function(self::task)?)?;
@@ -16,30 +19,34 @@ pub fn add_builtins(lua: &Lua, t: &Table) -> Result<()> {
     Ok(())
 }
 
-async fn task(lua: Lua, (name, task): (String, Task)) -> Result<()> {
-    let app = lua.app_data_ref::<App>().unwrap();
-    let mut tasks = app.tasks.write().await;
-    tasks.insert(name, task);
+async fn task(lua: Lua, (name, task): (String, Value)) -> Result<()> {
+    let dir = env::current_dir()?;
+    let id = TaskId::new(dir, name);
+    let task = Task::from_lua(task, &lua, id)?;
+    State::get(&lua).tasks().insert(task);
     Ok(())
 }
 
-async fn sh(_lua: Lua, cmd: Vec<String>) -> Result<()> {
-    let [prog, args @ ..] = cmd.as_slice() else {
-        return Err(anyhow::anyhow!("Expected array with atleast 1 element").into());
-    };
+async fn sh(_lua: Lua, cmd: String) -> Result<()> {
+    println!("$ {cmd}");
 
-    println!("{}", cmd.join(" "));
-    Command::new(prog).args(args).spawn()?.wait().await?;
+    Command::new("sh")
+        .arg("-c")
+        .arg(cmd)
+        .spawn()?
+        .wait()
+        .await?;
 
     Ok(())
 }
 
 async fn run(lua: Lua, (name, args): (String, Option<HashMap<String, String>>)) -> Result<()> {
-    let app = lua.app_data_ref::<App>().unwrap();
-    let tasks = app.tasks.write().await.clone();
-    let task = tasks.get(&name).context("Task does not exists")?;
-    task.run_with_table(&tasks, args.unwrap_or_default())
+    let s = State::get(&lua);
+
+    s.tasks()
+        .run_resolve(&name, env::current_dir()?, args.unwrap_or_default())
         .await?;
+
     Ok(())
 }
 

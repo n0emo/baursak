@@ -16,13 +16,13 @@ task("greet", {
 
 task("sleep-1", function()
 	print("Sleeping...")
-	sh({ "sleep", "2" })
+	sh("sleep 2")
 	print("Done")
 end)
 
 task("build", function()
-	print("Sleeping...")
-	sh({ "cargo", "build", "--release" })
+	print("Building...")
+	sh("cargo build --release")
 	print("Done")
 end)
 
@@ -42,3 +42,5 @@ task("all", {
 	run = [[echo "Runned all"]],
 	depends = { "bye", "greet", "sleep-1", "build" },
 })
+
+task("pwd", [[pwd]])

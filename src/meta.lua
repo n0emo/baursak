@@ -11,7 +11,7 @@ local Task = {}
 ---@param definition string|Task|function
 function task(name, definition) end
 
----@param command string[]
+---@param command string
 function sh(command) end
 
 ---Run another task
