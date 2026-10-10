@@ -23,3 +23,4 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Support for `baursak.lua`, `.baursak.lua`, `baursak/tasks.lua`, `.baursak/tasks.lua`
 - Tasks run in the directory of the file that defines them
 - Shell commands are printed before execution
+- Errors and diagnostics

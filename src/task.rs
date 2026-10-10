@@ -6,10 +6,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use anyhow::Context as _;
 use mlua::{Function, Lua, LuaSerdeExt as _, LuaString, Value};
 use serde::Deserialize;
-use tokio::process::Command;
+
+use crate::{errors::RunError, shell};
 
 #[derive(Debug, Clone, Default)]
 pub struct TaskMap {
@@ -17,6 +17,7 @@ pub struct TaskMap {
 }
 
 impl TaskMap {
+    #[allow(unused)]
     pub fn get(&self, id: &TaskId) -> Option<Arc<Task>> {
         self.tasks
             .read()
@@ -42,36 +43,6 @@ impl TaskMap {
 
     pub fn first(&self) -> Option<Arc<Task>> {
         self.tasks.read().unwrap().first().cloned()
-    }
-
-    #[allow(unused)]
-    pub async fn run(&self, id: &TaskId, args: impl IntoTaskArgs) -> anyhow::Result<()> {
-        self.get(id)
-            .context(format!("Task `{name}` does not exists", name = id.name))?
-            .run(self.clone(), args)
-            .await?;
-        Ok(())
-    }
-
-    pub async fn run_resolve(
-        &self,
-        name: &str,
-        dir: impl AsRef<Path>,
-        args: impl IntoTaskArgs,
-    ) -> anyhow::Result<()> {
-        self.resolve(name, dir)
-            .context(format!("Task `{name}` does not exists"))?
-            .run(self.clone(), args)
-            .await?;
-        Ok(())
-    }
-
-    pub async fn run_first(&self) -> anyhow::Result<()> {
-        self.first()
-            .context("There is no tasks defined".to_string())?
-            .run(self.clone(), ())
-            .await?;
-        Ok(())
     }
 }
 
@@ -147,17 +118,18 @@ impl Task {
                     Value::String(cmd) => TaskAction::Shell(cmd.to_string_lossy()),
                     Value::Function(function) => TaskAction::Function(function),
                     _ => {
-                        return Err(anyhow::anyhow!(
-                            "Invalid task 'run': expected string or function"
-                        )
-                        .into());
+                        return Err(mlua::Error::external(
+                            "invalid action: expected string or function",
+                        ));
                     }
                 };
                 table.remove("run")?;
                 let metadata = lua.from_value(Value::Table(table))?;
                 Ok(Self { id, run, metadata })
             }
-            _ => Err(anyhow::anyhow!("Invalid task: expected string, table or function").into()),
+            _ => Err(mlua::Error::external(
+                "invalid task description: expected string, table or function",
+            )),
         }
     }
 
@@ -165,20 +137,24 @@ impl Task {
         &self,
         tasks: TaskMap,
         args: impl IntoTaskArgs,
-    ) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + 'static>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), RunError>> + Send + 'static>> {
         let args = args.into_task_args(&self.metadata);
         let vars: HashMap<String, String> = std::env::vars().chain(args).collect();
         let run = self.run.clone();
         let depends = self.metadata.depends.clone();
         let working_dir = self.id.directory.clone();
+        let name: Arc<str> = self.id.name.as_str().into();
 
         let fut = async move {
             let depends = depends
                 .iter()
                 .map(|depend| {
-                    tasks
-                        .resolve(depend, &working_dir)
-                        .context("There is no such task")
+                    tasks.resolve(depend, &working_dir).ok_or_else(|| {
+                        RunError::DependencyNotFound {
+                            task: name.clone(),
+                            search: depend.as_str().into(),
+                        }
+                    })
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
@@ -187,19 +163,44 @@ impl Task {
                 .into_iter()
                 .collect::<Result<Vec<_>, _>>()?;
 
-            env::set_current_dir(working_dir)?;
+            env::set_current_dir(&working_dir).map_err(|e| RunError::SetCurrentDir {
+                task: name.clone(),
+                error: e,
+                path: working_dir.as_path().into(),
+            })?;
 
             match run {
-                TaskAction::Function(function) => function.call_async(vars).await?,
-                TaskAction::Shell(cmd) => {
-                    let cmd = subst::substitute(&cmd, &vars)?;
+                TaskAction::Function(function) => {
+                    function.call_async(vars).await.map_err(|e| RunError::Lua {
+                        task: name.clone(),
+                        error: e,
+                    })?
+                }
+
+                TaskAction::Shell(original_cmd) => {
+                    let cmd = subst::substitute(&original_cmd, &vars).map_err(|e| {
+                        RunError::SubstitutionError {
+                            task: name.clone(),
+                            error: e,
+                            command: original_cmd.as_str().into(),
+                        }
+                    })?;
+
                     println!("$ {cmd}");
-                    Command::new("sh")
-                        .arg("-c")
-                        .arg(&cmd)
-                        .spawn()?
-                        .wait()
-                        .await?;
+
+                    let code = shell::run_cmd(&cmd).await.map_err(|e| RunError::Shell {
+                        task: name.clone(),
+                        error: e,
+                        command: original_cmd.as_str().into(),
+                    })?;
+
+                    if code != 0 {
+                        return Err(RunError::ExitCode {
+                            task: name.clone(),
+                            code,
+                            command: original_cmd.as_str().into(),
+                        });
+                    }
                 }
             };
 

@@ -1,3 +1,5 @@
+task("default", "bk --list")
+
 task("install", "cargo install --path .")
 task("build", "cargo build --all-features")
 task("test", "cargo test --all-features")

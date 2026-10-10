@@ -8,10 +8,10 @@
 - [x] Builtin helpers: running commands, calling tasks, platform and command checks
 - [x] Config discovery in parent directories
 - [x] Editor support via generated LuaLS definitions
+- [x] Proper error handling
 
 ## Next
 
-- [ ] Proper error handling
 - [ ] Find Git Bash on Windows, falling back to PowerShell and cmd
 - [ ] Write documentation for common use cases
 - [ ] Load variables from `.env` files

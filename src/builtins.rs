@@ -2,9 +2,9 @@ use std::{collections::HashMap, env};
 
 use anyhow::anyhow;
 use mlua::{Lua, Result, Table, Value, Variadic};
-use tokio::process::Command;
 
 use crate::{
+    shell,
     task::{Task, TaskId},
     workspace::State,
 };
@@ -29,14 +29,11 @@ async fn task(lua: Lua, (name, task): (String, Value)) -> Result<()> {
 
 async fn sh(_lua: Lua, cmd: String) -> Result<()> {
     println!("$ {cmd}");
-
-    Command::new("sh")
-        .arg("-c")
-        .arg(cmd)
-        .spawn()?
-        .wait()
-        .await?;
-
+    let code = shell::run_cmd(&cmd).await?;
+    if code != 0 {
+        let msg = format!("command {cmd:?} exited with non-zero exit code {code}");
+        return Err(mlua::Error::external(msg));
+    }
     Ok(())
 }
 
@@ -44,8 +41,14 @@ async fn run(lua: Lua, (name, args): (String, Option<HashMap<String, String>>)) 
     let s = State::get(&lua);
 
     s.tasks()
-        .run_resolve(&name, env::current_dir()?, args.unwrap_or_default())
-        .await?;
+        .resolve(&name, env::current_dir()?)
+        .ok_or_else(|| {
+            mlua::Error::external(format!("task `{name}` does not exist in current context"))
+        })?
+        .run(s.tasks(), args.unwrap_or_default())
+        .await
+        // TODO: a failure in the inner task is reported under the name of the outer task that called `run()`
+        .map_err(mlua::Error::external)?;
 
     Ok(())
 }
